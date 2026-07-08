@@ -1,0 +1,12 @@
+# IDE
+.idea/
+*.iml
+.vscode/
+.claude/
+
+# Build artifacts
+target/
+*.class
+
+# OS
+.DS_Store
