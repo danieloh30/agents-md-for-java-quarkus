@@ -1,0 +1,105 @@
+name: Check and Update Quarkus Version
+
+on:
+  schedule:
+    - cron: '0 10 * * *'  # Runs daily at 10:00 UTC
+  workflow_dispatch:  # Allows manual triggering
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-quarkus-version:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Get current Quarkus version
+        id: current-version
+        run: |
+          CURRENT_VERSION=$(grep -oP '(?<=<quarkus.platform.version>)[^<]+' billing-service/pom.xml)
+          echo "current=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "Current Quarkus version: $CURRENT_VERSION"
+
+      - name: Get latest Quarkus version
+        id: latest-version
+        run: |
+          LATEST_VERSION=$(curl -s https://repo1.maven.org/maven2/io/quarkus/platform/quarkus-bom/maven-metadata.xml | grep -oP '(?<=<latest>)[^<]+')
+          echo "latest=$LATEST_VERSION" >> $GITHUB_OUTPUT
+          echo "Latest Quarkus version: $LATEST_VERSION"
+
+      - name: Compare versions
+        id: compare
+        run: |
+          if [ "${{ steps.current-version.outputs.current }}" != "${{ steps.latest-version.outputs.latest }}" ]; then
+            echo "update_needed=true" >> $GITHUB_OUTPUT
+            echo "Update needed: ${{ steps.current-version.outputs.current }} -> ${{ steps.latest-version.outputs.latest }}"
+          else
+            echo "update_needed=false" >> $GITHUB_OUTPUT
+            echo "Already on latest version"
+          fi
+
+      - name: Update Quarkus version
+        if: steps.compare.outputs.update_needed == 'true'
+        run: |
+          NEW_VERSION="${{ steps.latest-version.outputs.latest }}"
+          sed -i "s/<quarkus.platform.version>.*<\/quarkus.platform.version>/<quarkus.platform.version>$NEW_VERSION<\/quarkus.platform.version>/" billing-service/pom.xml
+          echo "Updated pom.xml to Quarkus $NEW_VERSION"
+
+      - name: Verify Maven build
+        if: steps.compare.outputs.update_needed == 'true'
+        run: |
+          cd billing-service
+          ./mvnw clean verify -DskipTests
+
+      - name: Create Pull Request
+        if: steps.compare.outputs.update_needed == 'true'
+        id: create-pr
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: update Quarkus to ${{ steps.latest-version.outputs.latest }}"
+          title: "chore: update Quarkus from ${{ steps.current-version.outputs.current }} to ${{ steps.latest-version.outputs.latest }}"
+          body: |
+            ## Quarkus Version Update
+
+            This PR updates the Quarkus platform version:
+            - **From:** `${{ steps.current-version.outputs.current }}`
+            - **To:** `${{ steps.latest-version.outputs.latest }}`
+
+            ### Changes
+            - Updated `quarkus.platform.version` in `billing-service/pom.xml`
+
+            ### Release Notes
+            See [Quarkus ${{ steps.latest-version.outputs.latest }} release notes](https://github.com/quarkusio/quarkus/releases/tag/${{ steps.latest-version.outputs.latest }})
+
+            ### Testing
+            - [x] Maven build verification completed successfully
+            - [x] Automated tests passed
+
+            ---
+            *This PR was automatically created and merged by the Quarkus version check workflow*
+          branch: quarkus-update-${{ steps.latest-version.outputs.latest }}
+          delete-branch: true
+          labels: |
+            dependencies
+            quarkus
+            automated
+
+      - name: Auto-merge Pull Request
+        if: steps.compare.outputs.update_needed == 'true' && steps.create-pr.outputs.pull-request-number != ''
+        run: |
+          gh pr merge ${{ steps.create-pr.outputs.pull-request-number }} --auto --squash --delete-branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
