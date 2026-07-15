@@ -55,12 +55,12 @@ mvn io.quarkus.platform:quarkus-maven-plugin:3.x.x:create \
 ### 3. Applies Core Extensions
 - **Guarantee essential extensions** are baked in from the first second:
   - `hibernate-orm-panache` for data access
-  - `resteasy-reactive` for REST endpoints
+  - `rquarkus-rest` for REST endpoints
 - **Add extensions during creation**:
 ```bash
 mvn io.quarkus.platform:quarkus-maven-plugin:create \
   ... \
-  -Dextensions="hibernate-orm-panache,resteasy-reactive,jdbc-postgresql"
+  -Dextensions="hibernate-orm-panache,quarkus-rest,jdbc-postgresql"
 ```
 - This prevents the agent from creating legacy or blocking code templates down the line.
 
