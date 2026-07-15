@@ -1,5 +1,7 @@
 # AI Agents for Java/Quarkus Development
 
+![Agents](assets/images/agents.png)
+
 This repository demonstrates how AI agents can effectively scaffold and develop Quarkus microservices by following explicit architectural guidelines defined in `AGENTS.md`.
 
 ## What's Inside
